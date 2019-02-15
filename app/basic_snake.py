@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import json
 import os
 import random
@@ -17,7 +19,6 @@ def static(path):
     """
     Given a path, return the static file located relative
     to the static folder.
-
     This can be used to return the snake head URL in an API response.
     """
     return bottle.static_file(path, root='static/')
@@ -41,7 +42,7 @@ def start():
     """
     print(json.dumps(data))
 
-    color = "#00FF00"
+    color = "#00b2ff"
 
     return start_response(color)
 
@@ -88,7 +89,7 @@ def get_head_my_snake(data):
 
 
 
-def get_all_snakes_with_tails(data): 
+def get_all_snakes_with_tails(data): ##currently is getting all snakes!!!
     '''
     json_data->coordinates_list
     '''
@@ -188,9 +189,7 @@ def places_other_snakes_could_go(data):
     return ret_list
     
 
-def moves_that_do_not_kill_you(data, size_board): 
-    #assumes snake tails not to be deadly in general
-    #-> has to be changed taking food into consideration
+def moves_that_do_not_kill_you(data, size_board):
     '''
     data -> list of moves
     '''
@@ -218,75 +217,46 @@ def moves_that_do_not_kill_you(data, size_board):
         
     return pos_moves
 
-def average (coordinates_list):
+def moves_less_likely_to_kill_you(data, size_board):
     '''
-    list -> coordinate
+    data -> list of moves
+    first finds all moves that do not kill you
+    then finds possibly dangerous moves (other snakes could go there)
+    returns moves that are considered least dangerous
+    ##not that much usefull, since head on head sometimes is good for you in t
+    ##terms of killing an opponent and getting out there
     '''
-    y=0.0
-    x=0.0
-    div=len(coordinates_list)
-    
-    if div==0: div=-1
-    
-    for a in coordinates_list:
-        y+=a[0]
-        x+=a[1]
-    y = y/div
-    x=  x/div
-        
-    return (y,x)
-        
-def center_of_snake_mass (data):
-    '''
-    data -> coordinate (of floats)
-    returns the center of all snake mass as an average of where they all are
-    '''
-    coordinates = get_all_snakes_with_tails(data)
-    print(coordinates)
-    return average (coordinates)
-
-from math import sqrt 
-
-def distance(coordinate_a, coordinate_b):
-    '''
-    coordinates -> float
-    '''
-    y_dif=coordinate_a[0]-coordinate_b[0]
-    x_dif=coordinate_a[1]-coordinate_b[1]
-    
-    return sqrt(y_dif**2+x_dif**2)
-
-
-def snakeophobic_move(data, board_size):
-    '''
-    json_data, int -> move
-    chooses the move that brings the snake away from center of snakemass
-    '''
-    moves = moves_that_do_not_kill_you(data, board_size)
-    ahhh = center_of_snake_mass(data)
+    pos_moves=[]
     head = get_head_my_snake(data)
-    if len(moves) == 1:
-        return moves
-    if len(moves) == 0:
-        return []
+    snakes = get_all_snakes_without_tails(data)
     
-    biggest = 0
-    return_me = [(-1,-1)]
-    
-    for a in moves:
-        
-        if distance(move_to(head, a), ahhh) >= biggest:
-            biggest = distance(move_to(head, a), ahhh)
-            return_me = [a]
-        
-    return return_me
+    if is_no_wall(move_to(head, 'up'),size_board):
+        if not (move_to(head, 'up') in snakes):
+            pos_moves.append('up')
             
-        
+    if is_no_wall(move_to(head, 'down'),size_board):
+        if not (move_to(head, 'down') in snakes):
+            pos_moves.append('down')
+            
+    if is_no_wall(move_to(head, 'right'),size_board):
+        if not (move_to(head, 'right') in snakes):
+            pos_moves.append('right')
+            
+    if is_no_wall(move_to(head, 'left'),size_board):
+        if not (move_to(head, 'left') in snakes):
+            pos_moves.append('left')
     
-
-#needed: function that chooses move that maximizes 
-#distance from center of snake mass
-#maybe also from walls?
+    
+    danger_fields = places_other_snakes_could_go(data)
+    safe_list=[]
+    for a in pos_moves:
+        if not (move_to(head, a) in danger_fields):
+            safe_list.append (a)
+    
+    if len(safe_list)==0: 
+        return pos_moves
+    
+    return safe_list
 
 
 
@@ -297,7 +267,7 @@ def debug_print(data):  #just for debugging
     '''
     currently needed debugging print statements
     '''
-    print("\n\n")
+#    print("\n\n")
 #    #print(json.dumps(data))
 #    print (get_other_snakes_heads(data))
 #    print("\n")
@@ -306,13 +276,11 @@ def debug_print(data):  #just for debugging
 #    print(moves_less_likely_to_kill_you(data, STANDARD_SIZE))
 #    print("\n")
 #    print (places_other_snakes_could_go(data))
-    print(center_of_snake_mass(data))
-    print(snakeophobic_move(data, STANDARD_SIZE))
-    print("\n\n")
+#    print("\n\n")
     
     return
     
-last_moves = [''] #saving all the last moves #just for play
+last_moves = ['','']
 
 @bottle.post('/move')
 
@@ -325,12 +293,13 @@ def move():
     """
     debug_print(data) #just for debugging
         
-    directions = snakeophobic_move(data, STANDARD_SIZE)
+    directions = moves_that_do_not_kill_you(data, STANDARD_SIZE)
     if len(directions)==0:
         directions = ['left', 'right', 'up','down']
-   
+        
+    
     direction = random.choice(directions)
-    last_moves.append(direction)
+
 
     return move_response(direction)
 
@@ -359,6 +328,6 @@ if __name__ == '__main__':
     bottle.run(
         application,
         host=os.getenv('IP', '0.0.0.0'),
-        port=os.getenv('PORT', '8080'),
+        port=os.getenv('PORT', '8081'),
         debug=os.getenv('DEBUG', True)
     )
